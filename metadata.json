@@ -1,0 +1,6 @@
+{
+  "name": "Estoque & BI Preditivo",
+  "description": "Plataforma SaaS de gestão de estoque inteligente e BI preditivo com um Analista Virtual de Compras e Suprimentos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
