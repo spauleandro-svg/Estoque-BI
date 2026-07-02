@@ -1,19 +1,27 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 
-// Initialize the GoogleGenAI client on the server side
-// Set the User-Agent header to 'aistudio-build' in httpOptions for telemetry
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
-
 export async function POST(req: NextRequest) {
   try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({
+        sucesso: false,
+        erro: "Configuração ausente: A variável de ambiente GEMINI_API_KEY não foi configurada. Configure a sua chave de API nas configurações do Vercel ou do AI Studio para ativar as análises com inteligência artificial."
+      }, { status: 500 });
+    }
+
+    // Initialize the GoogleGenAI client on the server side
+    // Set the User-Agent header to 'aistudio-build' in httpOptions for telemetry
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
     const body = await req.json();
     const { id_cliente, historico_vendas, niveis_estoque, fichas_tecnicas, alertas_validade } = body;
 
