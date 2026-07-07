@@ -2510,6 +2510,7 @@ export default function Dashboard() {
         <AnimatePresence>
           {results && !loading && !error && (
             <motion.div
+              key="analytics-results"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
@@ -2852,7 +2853,14 @@ export default function Dashboard() {
       {/* QUICK ACTION DRAWER / MODAL */}
       <AnimatePresence>
         {modalOpen && modalType && selectedItem && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50" id="action-modal">
+          <motion.div
+            key="action-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            id="action-modal"
+          >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -2971,7 +2979,7 @@ export default function Dashboard() {
                 </button>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
