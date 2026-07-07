@@ -1,22 +1,58 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
-
-// Initialize Gemini SDK with custom User-Agent and proper credentials
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      "User-Agent": "aistudio-build"
-    }
-  }
-});
+import { getSecurityHeaders, verifyToken, checkRateLimit, validateInputAndTenant, sanitizePII } from "@/lib/security";
 
 export async function POST(req: NextRequest) {
+  const { allowed, headers } = getSecurityHeaders(req);
+  if (!allowed) {
+    return NextResponse.json({ sucesso: false, erro: "Origem não autorizada (CORS)." }, { status: 403, headers });
+  }
+
   try {
+    // 1. JWT Authentication
+    const authHeader = req.headers.get("Authorization");
+    const tokenData = verifyToken(authHeader || "");
+    if (!tokenData) {
+      return NextResponse.json({ sucesso: false, erro: "Acesso negado: Token inválido, expirado ou revogado pós-logout." }, { status: 401, headers });
+    }
+
+    // 2. Rate Limiting (IP + Conta)
+    const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
+    const rateLimit = checkRateLimit(ip, tokenData.email);
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ sucesso: false, erro: "Limite de requisições excedido (Rate Limit por IP + Conta)." }, { status: 429, headers });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({
+        sucesso: false,
+        erro: "Configuração ausente: A variável de ambiente GEMINI_API_KEY não foi configurada. Configure a sua chave de API nas configurações do Vercel ou do AI Studio para ativar o mapeamento de planilhas com inteligência artificial."
+      }, { status: 500, headers });
+    }
+
+    // Initialize Gemini SDK with custom User-Agent and proper credentials
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build"
+        }
+      }
+    });
+
     const { raw_data } = await req.json();
 
     if (!raw_data) {
-      return NextResponse.json({ sucesso: false, erro: "Os dados brutos (raw_data) são necessários para o mapeamento." }, { status: 400 });
+      return NextResponse.json({ sucesso: false, erro: "Os dados brutos (raw_data) são necessários para o mapeamento." }, { status: 400, headers });
+    }
+
+    // 3. SQLi & Input Validation
+    const rawDataStr = typeof raw_data === "string" ? raw_data : JSON.stringify(raw_data);
+    const inputValidation = validateInputAndTenant(rawDataStr, tokenData.id_cliente);
+    // Note: raw data could contain references to other tenant IDs, but we will force the mapped scenario to carry the token's authorized id_cliente
+    if (!inputValidation.valid) {
+      return NextResponse.json({ sucesso: false, erro: inputValidation.error }, { status: 403, headers });
     }
 
     const prompt = `
@@ -149,17 +185,24 @@ Retorne o resultado estritamente seguindo o formato JSON do "ClientScenario", se
     }
 
     const mappedScenario = JSON.parse(resultText);
+    
+    // Ensure the mapped id_cliente conforms to user's token tenant ID to prevent IDOR spoofing
+    if (tokenData.id_cliente) {
+      mappedScenario.id_cliente = tokenData.id_cliente;
+    }
+
+    const sanitizedScenario = sanitizePII(mappedScenario);
 
     return NextResponse.json({
       sucesso: true,
-      mapped_scenario: mappedScenario
-    });
+      mapped_scenario: sanitizedScenario
+    }, { headers });
 
   } catch (error: any) {
     console.error("Erro no mapeamento com IA:", error);
     return NextResponse.json({
       sucesso: false,
       erro: error.message || "Erro desconhecido ao mapear com IA."
-    }, { status: 500 });
+    }, { status: 500, headers });
   }
 }

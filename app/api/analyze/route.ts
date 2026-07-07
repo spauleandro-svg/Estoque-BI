@@ -1,14 +1,34 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
+import { getSecurityHeaders, verifyToken, checkRateLimit, validateInputAndTenant, sanitizePII } from "@/lib/security";
 
 export async function POST(req: NextRequest) {
+  const { allowed, headers } = getSecurityHeaders(req);
+  if (!allowed) {
+    return NextResponse.json({ sucesso: false, erro: "Origem não autorizada (CORS)." }, { status: 403, headers });
+  }
+
   try {
+    // 1. JWT Authentication
+    const authHeader = req.headers.get("Authorization");
+    const tokenData = verifyToken(authHeader || "");
+    if (!tokenData) {
+      return NextResponse.json({ sucesso: false, erro: "Acesso negado: Token inválido, expirado ou revogado pós-logout." }, { status: 401, headers });
+    }
+
+    // 2. Rate Limiting (IP + Conta)
+    const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
+    const rateLimit = checkRateLimit(ip, tokenData.email);
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ sucesso: false, erro: "Limite de requisições excedido (Rate Limit por IP + Conta)." }, { status: 429, headers });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json({
         sucesso: false,
         erro: "Configuração ausente: A variável de ambiente GEMINI_API_KEY não foi configurada. Configure a sua chave de API nas configurações do Vercel ou do AI Studio para ativar as análises com inteligência artificial."
-      }, { status: 500 });
+      }, { status: 500, headers });
     }
 
     // Initialize the GoogleGenAI client on the server side
@@ -25,19 +45,25 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { id_cliente, historico_vendas, niveis_estoque, fichas_tecnicas, alertas_validade } = body;
 
-    // 1. Validation for Tenant ID and Data consistency
+    // 3. IDOR and SQLi prevention
+    const inputValidation = validateInputAndTenant(id_cliente, tokenData.id_cliente);
+    if (!inputValidation.valid) {
+      return NextResponse.json({ sucesso: false, erro: inputValidation.error }, { status: 403, headers });
+    }
+
+    // Validation for Tenant ID and Data consistency
     if (!id_cliente || id_cliente.trim() === "") {
       return NextResponse.json({
         sucesso: false,
         erro: "ID de cliente ausente. Para segurança e privacidade (Multitenancy), o ID do cliente deve ser informado para isolar o contexto.",
-      }, { status: 400 });
+      }, { status: 400, headers });
     }
 
     if (!historico_vendas || !niveis_estoque) {
       return NextResponse.json({
         sucesso: false,
         erro: "Dados de inventário e vendas inconsistentes ou ausentes. Verifique o formato do JSON de entrada.",
-      }, { status: 400 });
+      }, { status: 400, headers });
     }
 
     // Prepare system instructions for strictly structured, isolated, single-tenant context
@@ -155,17 +181,32 @@ export async function POST(req: NextRequest) {
     }
 
     const parsedResponse = JSON.parse(text);
+    const sanitizedResponse = sanitizePII(parsedResponse);
 
     return NextResponse.json({
       sucesso: true,
-      data: parsedResponse
-    });
+      data: sanitizedResponse
+    }, { headers });
 
   } catch (error: any) {
     console.error("Erro na rota de análise:", error);
+    
+    // Parse the error to provide a friendly message to the end user
+    const errorStr = String(error?.message || error || "");
+    const status = error?.status || error?.code || error?.error?.code || "";
+    let friendlyError = error?.message || "Erro interno ao processar a análise preditiva.";
+    
+    if (status === 503 || errorStr.includes("503") || errorStr.toLowerCase().includes("unavailable") || errorStr.toLowerCase().includes("high demand") || errorStr.toLowerCase().includes("overloaded")) {
+      friendlyError = "O servidor da Inteligência Artificial (Google Gemini) está temporariamente sob alta demanda (Erro 503). Por favor, aguarde alguns segundos e clique em 'Gerar Nova Análise Preditiva' novamente.";
+    } else if (status === 429 || errorStr.includes("429") || errorStr.toLowerCase().includes("quota") || errorStr.toLowerCase().includes("limit exceeded") || errorStr.toLowerCase().includes("rate limit")) {
+      friendlyError = "Limite de cota de requisições de IA excedido temporariamente (Erro 429). Por favor, aguarde um minuto e tente novamente.";
+    } else if (status === 400 || errorStr.includes("400") || errorStr.toLowerCase().includes("bad request") || errorStr.toLowerCase().includes("api key")) {
+      friendlyError = "Erro de configuração ou parâmetros inválidos na requisição de IA (Erro 400). Por favor, verifique se a sua chave GEMINI_API_KEY está configurada corretamente nas configurações.";
+    }
+
     return NextResponse.json({
       sucesso: false,
-      erro: error.message || "Erro interno ao processar a análise preditiva."
-    }, { status: 500 });
+      erro: friendlyError
+    }, { status: 500, headers });
   }
 }

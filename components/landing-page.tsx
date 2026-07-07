@@ -29,7 +29,9 @@ import {
   ArrowUpRight,
   Calculator,
   MessageSquare,
-  Info
+  Info,
+  Check,
+  CreditCard
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -142,16 +144,16 @@ export function LandingPage({ onNavigateToAuth }: LandingPageProps) {
               {/* Trust Indicators */}
               <div className="pt-6 grid grid-cols-3 gap-4 border-t border-emerald-50 max-w-lg">
                 <div>
-                  <div className="text-2xl font-black text-neutral-900">72 Horas</div>
-                  <div className="text-[11px] text-neutral-500 font-medium">Teste Grátis Completo</div>
+                  <div className="text-xl sm:text-2xl font-black text-neutral-900">R$ 119,90</div>
+                  <div className="text-[11px] text-neutral-500 font-medium">mensal (Plano Pro)</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-black text-emerald-600">Até 90%</div>
+                  <div className="text-xl sm:text-2xl font-black text-emerald-600">Até 90%</div>
                   <div className="text-[11px] text-neutral-500 font-medium">Redução de Rupturas</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-black text-neutral-900">Pix/Cartão</div>
-                  <div className="text-[11px] text-neutral-500 font-medium">via Mercado Pago</div>
+                  <div className="text-xl sm:text-2xl font-black text-neutral-900">72 Horas</div>
+                  <div className="text-[11px] text-neutral-500 font-medium">de Teste Grátis</div>
                 </div>
               </div>
             </div>
@@ -363,7 +365,7 @@ export function LandingPage({ onNavigateToAuth }: LandingPageProps) {
               <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
                 <ShieldCheck className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-neutral-900">Segurança & Sandbox Local</h3>
+              <h3 className="text-base font-bold text-neutral-900">Segurança & Nuvem Corporativa</h3>
               <p className="text-xs text-neutral-500 leading-relaxed">
                 Não solicitamos dados bancários ou cartões no período de teste gratuito. Seus dados cadastrados ficam salvos com segurança de forma isolada e privativa.
               </p>
@@ -557,6 +559,71 @@ export function LandingPage({ onNavigateToAuth }: LandingPageProps) {
         </div>
       </section>
 
+      {/* Planos de Assinatura Section */}
+      <section className="py-20 bg-neutral-50 border-t border-b border-emerald-50 px-4 sm:px-6 lg:px-8" id="planos">
+        <div className="max-w-4xl mx-auto space-y-12 text-center">
+          <div className="space-y-4">
+            <span className="text-xs font-mono font-bold text-emerald-600 tracking-wider uppercase">Plano de Assinatura</span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-neutral-900">
+              Acesso Completo e Ilimitado ao STOCK.BI
+            </h2>
+            <p className="text-sm text-neutral-500 max-w-2xl mx-auto">
+              Sem taxas ocultas, sem limites de análises. Potencialize seu negócio com IA inteligente hoje.
+            </p>
+          </div>
+
+          <div className="max-w-sm mx-auto bg-white border-2 border-emerald-500 rounded-3xl p-8 shadow-xl space-y-6 relative">
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold tracking-widest uppercase shadow">
+              Plano Recomendado
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-neutral-950">Assinatura Profissional</h3>
+              <p className="text-xs text-neutral-500">Ideal para restaurantes, comércios, varejos e distribuidoras.</p>
+            </div>
+
+            <div className="py-4 border-t border-b border-neutral-100">
+              <div className="flex items-baseline justify-center gap-1">
+                <span className="text-sm font-semibold text-neutral-500">R$</span>
+                <span className="text-5xl font-black text-neutral-950">119,90</span>
+                <span className="text-sm font-medium text-neutral-500">/mês</span>
+              </div>
+            </div>
+
+            <ul className="space-y-3 text-left text-xs text-neutral-600">
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>Análises Preditivas com IA Ilimitadas</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>Mapeamento Automático de Planilhas</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>Previsão de Ruptura e Giro</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>Chat de Consultoria com IA integrado</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>Exportação Excel/XLSX ilimitada</span>
+              </li>
+            </ul>
+
+            <button
+              onClick={() => onNavigateToAuth("register")}
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl text-center shadow-lg shadow-emerald-600/20 hover:shadow-emerald-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer text-sm"
+            >
+              Começar Teste de 72h →
+            </button>
+            <p className="text-[10px] text-neutral-400">Sem burocracia. Cancele quando quiser.</p>
+          </div>
+        </div>
+      </section>
+
       {/* Accordion FAQ Section */}
       <section className="py-20 bg-white px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto space-y-8">
@@ -568,20 +635,20 @@ export function LandingPage({ onNavigateToAuth }: LandingPageProps) {
           <div className="space-y-4 text-left">
             {[
               {
-                q: "Como funciona o período de testes gratuito?",
-                a: "Ao se cadastrar, você ganha 72 horas de acesso completo para testar com calma, conectar suas planilhas de faturamento ou inventário e rodar sua primeira análise preditiva com nossa Inteligência Artificial."
+                q: "Existe algum período de testes?",
+                a: "Sim! Oferecemos um período de teste gratuito de 72 horas para que você configure seu estabelecimento, importe seus dados via Excel e experimente todas as funcionalidades inteligentes sem custos."
               },
               {
                 q: "Como funciona a atualização de dados via Excel?",
-                a: "É super simples! Você baixa nosso modelo de planilha padrão de 1 linha ou arrasta qualquer relatório em formato .xlsx ou .csv que você exporte do seu ERP/sistema atual. Nossa IA mapeia automaticamente os campos de ingrediente, estoque atual e custo."
+                a: "É super simples! Você baixa nosso modelo de planilha padrão ou arrasta qualquer relatório em formato .xlsx ou .csv que você exporte do seu ERP/sistema atual. Nossa IA mapeia automaticamente os campos de ingrediente, estoque atual e custo."
               },
               {
-                q: "Qual o valor após o período de teste e como assinar?",
-                a: "A assinatura mensal custa apenas R$ 99,00 para ter acesso ilimitado. A integração de pagamento é feita de forma extremamente segura através do Mercado Pago, aceitando Pix ou Cartão de Crédito."
+                q: "Qual o valor da assinatura do STOCK.BI?",
+                a: "A assinatura profissional do STOCK.BI custa apenas R$ 119,90 por mês e dá acesso ilimitado a todas as ferramentas de previsão de demanda, inteligência preditiva de estoque e chat de consultoria com inteligência artificial."
               },
               {
-                q: "Posso cancelar a assinatura quando quiser?",
-                a: "Sim! Não há taxas de fidelidade ou de cancelamento. Você pode assinar e gerenciar de forma rápida direto pelo link oficial de assinaturas do Mercado Pago."
+                q: "Preciso de contrato de fidelidade?",
+                a: "Não! A assinatura do STOCK.BI funciona de forma mensal recorrente. Você pode cancelar sua assinatura a qualquer momento através do link de faturamento de forma imediata e sem qualquer multa."
               }
             ].map((faq, idx) => (
               <div key={idx} className="bg-neutral-50 border border-neutral-200/60 rounded-2xl overflow-hidden transition-all">

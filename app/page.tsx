@@ -39,12 +39,16 @@ import {
   UploadCloud,
   Download,
   CreditCard,
-  Clock
+  Clock,
+  Users,
+  Shield,
+  UserCheck
 } from "lucide-react";
 import { SCENARIOS, ClientScenario, StockItem, SalesHistory, ExpirationAlert, Recipe } from "@/lib/scenarios";
 import { cn } from "@/lib/utils";
 import { AuthScreens } from "@/components/auth-screens";
 import { LandingPage } from "@/components/landing-page";
+import { AdminDashboard } from "@/components/admin-dashboard";
 
 export default function Dashboard() {
   // --- USER AUTHENTICATION & MULTI-TENANCY STATES ---
@@ -55,11 +59,7 @@ export default function Dashboard() {
   const [authTab, setAuthTab] = useState<"login" | "register">("login");
   const [dbSaving, setDbSaving] = useState<boolean>(false);
   const [dbSaveSuccess, setDbSaveSuccess] = useState<string | null>(null);
-
-  // --- MERCADO PAGO & PAYWALL STATES ---
-  const [stripeSuccessModal, setStripeSuccessModal] = useState<boolean>(false);
-  const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [adminViewTab, setAdminViewTab] = useState<"analises" | "gestao">("analises");
 
   const loadUserRecord = (email: string) => {
     const allUsers = JSON.parse(localStorage.getItem("stock_bi_registered_users") || "[]");
@@ -76,6 +76,10 @@ export default function Dashboard() {
       }
       if (found.aiAnalysisCount === undefined) {
         found.aiAnalysisCount = 0;
+        changed = true;
+      }
+      if (!found.role) {
+        found.role = found.email.toLowerCase() === "npauleandro@gmail.com" ? "Super usuário" : (found.email.toLowerCase() === "pauleandronunes@gmail.com" ? "Administrador" : "Cliente");
         changed = true;
       }
       if (changed) {
@@ -102,54 +106,75 @@ export default function Dashboard() {
     }
   };
 
+  const handleUserDatabaseChange = () => {
+    if (user) {
+      loadUserRecord(user.email);
+    }
+  };
+
   useEffect(() => {
     // 1. Seed default accounts if empty
     const storedUsers = localStorage.getItem("stock_bi_registered_users");
-    if (!storedUsers) {
-      const defaultUsers = [
-        {
-          name: "Paulo Leandro",
-          email: "pauleandronunes@gmail.com",
+    const npauleandroEmail = "npauleandro@gmail.com";
+    let allUsers = storedUsers ? JSON.parse(storedUsers) : [];
+
+    const defaultUsers = [
+      {
+        name: "Paulo Leandro",
+        email: "pauleandronunes@gmail.com",
+        passwordHash: "123456",
+        role: "Administrador",
+        createdAt: new Date().toISOString(),
+        isPaid: true,
+        aiAnalysisCount: 0,
+        client: {
+          ...JSON.parse(JSON.stringify(SCENARIOS.pizzaria)),
+          nome_fantasia: "Pizzaria do Paulo",
+          id_cliente: "CLI-PAULO-99"
+        }
+      },
+      {
+        name: "Super Leandro",
+        email: npauleandroEmail,
+        passwordHash: "123456",
+        role: "Super usuário",
+        createdAt: new Date().toISOString(),
+        isPaid: true,
+        aiAnalysisCount: 0,
+        client: {
+          ...JSON.parse(JSON.stringify(SCENARIOS.pizzaria)),
+          nome_fantasia: "STOCK.BI Admin",
+          id_cliente: "CLI-ADMIN-99"
+        }
+      }
+    ];
+
+    if (!storedUsers || allUsers.length === 0) {
+      localStorage.setItem("stock_bi_registered_users", JSON.stringify(defaultUsers));
+      allUsers = defaultUsers;
+    } else {
+      // Ensure npauleandro@gmail.com is seeded even if users already exist
+      const hasNpauleandro = allUsers.some((u: any) => u.email.toLowerCase() === npauleandroEmail);
+      if (!hasNpauleandro) {
+        allUsers.push({
+          name: "Super Leandro",
+          email: npauleandroEmail,
           passwordHash: "123456",
+          role: "Super usuário",
           createdAt: new Date().toISOString(),
-          isPaid: false,
+          isPaid: true,
           aiAnalysisCount: 0,
           client: {
             ...JSON.parse(JSON.stringify(SCENARIOS.pizzaria)),
-            nome_fantasia: "Pizzaria do Paulo",
-            id_cliente: "CLI-PAULO-99"
+            nome_fantasia: "STOCK.BI Admin",
+            id_cliente: "CLI-ADMIN-99"
           }
-        }
-      ];
-      localStorage.setItem("stock_bi_registered_users", JSON.stringify(defaultUsers));
-    }
-
-    // 2. Check Mercado Pago redirect parameters in URL
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      const status = urlParams.get("payment_status") || urlParams.get("status") || urlParams.get("collection_status");
-      const sessionId = urlParams.get("session_id") || urlParams.get("preference_id");
-      if ((status === "success" || status === "approved") && sessionId) {
-        const activeUserStr = localStorage.getItem("stock_bi_active_user");
-        if (activeUserStr) {
-          const parsedUser = JSON.parse(activeUserStr);
-          const allUsers = JSON.parse(localStorage.getItem("stock_bi_registered_users") || "[]");
-          const updatedUsers = allUsers.map((u: any) => {
-            if (u.email.toLowerCase() === parsedUser.email.toLowerCase()) {
-              return { ...u, isPaid: true };
-            }
-            return u;
-          });
-          localStorage.setItem("stock_bi_registered_users", JSON.stringify(updatedUsers));
-          
-          // Clear query parameters from URL so they don't trigger again on reload
-          window.history.replaceState({}, document.title, window.location.pathname);
-          setStripeSuccessModal(true);
-        }
+        });
+        localStorage.setItem("stock_bi_registered_users", JSON.stringify(allUsers));
       }
     }
 
-    // 3. Load active session
+    // 2. Load active session
     const activeUser = localStorage.getItem("stock_bi_active_user");
     if (activeUser) {
       const parsedUser = JSON.parse(activeUser);
@@ -157,7 +182,6 @@ export default function Dashboard() {
       loadUserRecord(parsedUser.email);
       
       // Load user-specific client
-      const allUsers = JSON.parse(localStorage.getItem("stock_bi_registered_users") || "[]");
       const userRecord = allUsers.find((u: any) => u.email.toLowerCase() === parsedUser.email.toLowerCase());
       if (userRecord && userRecord.client) {
         setCurrentScenario(userRecord.client);
@@ -167,30 +191,56 @@ export default function Dashboard() {
     setAuthLoading(false);
   }, []);
 
-  const handleLogin = (email: string, pass: string) => {
-    const allUsers = JSON.parse(localStorage.getItem("stock_bi_registered_users") || "[]");
-    const found = allUsers.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
-    
-    if (!found) {
-      return { success: false, error: "Usuário não cadastrado." };
-    }
-    if (found.passwordHash !== pass) {
-      return { success: false, error: "Senha incorreta." };
-    }
+  const handleLogin = async (email: string, pass: string) => {
+    try {
+      const allUsers = JSON.parse(localStorage.getItem("stock_bi_registered_users") || "[]");
+      const found = allUsers.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+      
+      if (!found || found.passwordHash !== pass) {
+        return { success: false, error: "E-mail ou senha inválido" };
+      }
 
-    localStorage.setItem("stock_bi_active_user", JSON.stringify({ name: found.name, email: found.email }));
-    setUser({ name: found.name, email: found.email });
-    loadUserRecord(found.email);
-    
-    if (found.client) {
-      setCurrentScenario(found.client);
-      setSelectedKey("custom");
-    }
+      // Fetch JWT Session from server
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          name: found.name,
+          password: pass,
+          id_cliente: found.client?.id_cliente || "CLI-UNKNOWN-00"
+        })
+      });
 
-    return { success: true };
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        return { success: false, error: errData.erro || errData.error || "Erro de validação de sessão." };
+      }
+
+      let sessionData;
+      try {
+        sessionData = await response.json();
+      } catch (jsonErr) {
+        return { success: false, error: "Resposta do servidor em formato inválido. Por favor, tente novamente ou reinicie a página." };
+      }
+
+      localStorage.setItem("stock_bi_token", sessionData.token);
+      localStorage.setItem("stock_bi_active_user", JSON.stringify({ name: found.name, email: found.email }));
+      setUser({ name: found.name, email: found.email });
+      loadUserRecord(found.email);
+      
+      if (found.client) {
+        setCurrentScenario(found.client);
+        setSelectedKey("custom");
+      }
+
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message || "Erro inesperado ao efetuar login." };
+    }
   };
 
-  const handleRegister = (
+  const handleRegister = async (
     name: string,
     email: string,
     pass: string,
@@ -198,50 +248,116 @@ export default function Dashboard() {
     segment: string,
     templateKey: string
   ) => {
-    const allUsers = JSON.parse(localStorage.getItem("stock_bi_registered_users") || "[]");
-    const exists = allUsers.some((u: any) => u.email.toLowerCase() === email.toLowerCase());
+    try {
+      const allUsers = JSON.parse(localStorage.getItem("stock_bi_registered_users") || "[]");
+      const exists = allUsers.some((u: any) => u.email.toLowerCase() === email.toLowerCase());
 
-    if (exists) {
-      return { success: false, error: "Este e-mail já está cadastrado." };
+      if (exists) {
+        return { success: false, error: "Este e-mail já está cadastrado." };
+      }
+
+      const baseTemplate = SCENARIOS[templateKey] || SCENARIOS.pizzaria;
+      const id_cliente = `CLI-${name.split(" ")[0].toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const userClient: ClientScenario = {
+        ...JSON.parse(JSON.stringify(baseTemplate)),
+        id_cliente,
+        nome_fantasia: businessName,
+        segmento: segment,
+        contato_compras: email
+      };
+
+      const newUser = {
+        name,
+        email,
+        passwordHash: pass,
+        role: "Cliente",
+        createdAt: new Date().toISOString(),
+        isPaid: false,
+        aiAnalysisCount: 0,
+        client: userClient
+      };
+
+      const updatedUsers = [...allUsers, newUser];
+      localStorage.setItem("stock_bi_registered_users", JSON.stringify(updatedUsers));
+
+      // Fetch JWT Session from server
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          name,
+          password: pass,
+          id_cliente
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        return { success: false, error: errData.erro || errData.error || "Erro de criação de sessão segura." };
+      }
+
+      let sessionData;
+      try {
+        sessionData = await response.json();
+      } catch (jsonErr) {
+        return { success: false, error: "Resposta do servidor em formato inválido no cadastro. Por favor, tente novamente." };
+      }
+
+      localStorage.setItem("stock_bi_token", sessionData.token);
+      localStorage.setItem("stock_bi_active_user", JSON.stringify({ name, email }));
+      
+      setUser({ name, email });
+      loadUserRecord(email);
+      setCurrentScenario(userClient);
+      setSelectedKey("custom");
+
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message || "Erro inesperado ao cadastrar." };
     }
-
-    const baseTemplate = SCENARIOS[templateKey] || SCENARIOS.pizzaria;
-    const userClient: ClientScenario = {
-      ...JSON.parse(JSON.stringify(baseTemplate)),
-      id_cliente: `CLI-${name.split(" ")[0].toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
-      nome_fantasia: businessName,
-      segmento: segment,
-      contato_compras: email
-    };
-
-    const newUser = {
-      name,
-      email,
-      passwordHash: pass,
-      createdAt: new Date().toISOString(),
-      isPaid: false,
-      aiAnalysisCount: 0,
-      client: userClient
-    };
-
-    const updatedUsers = [...allUsers, newUser];
-    localStorage.setItem("stock_bi_registered_users", JSON.stringify(updatedUsers));
-    localStorage.setItem("stock_bi_active_user", JSON.stringify({ name, email }));
-    
-    setUser({ name, email });
-    loadUserRecord(email);
-    setCurrentScenario(userClient);
-    setSelectedKey("custom");
-
-    return { success: true };
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const token = localStorage.getItem("stock_bi_token");
+    if (token) {
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token })
+        });
+      } catch (err) {
+        console.error("Erro ao revogar token no logout:", err);
+      }
+    }
     localStorage.removeItem("stock_bi_active_user");
+    localStorage.removeItem("stock_bi_token");
     setUser(null);
     setUserRecord(null);
     setSelectedKey("pizzaria");
     setCurrentScenario(SCENARIOS.pizzaria);
+  };
+
+  const handleClearAllData = async () => {
+    if (confirm("Tem certeza que deseja limpar todos os dados cadastrados e as configurações? Esta ação é irreversível e excluirá todos os dados salvos no navegador.")) {
+      const token = localStorage.getItem("stock_bi_token");
+      if (token) {
+        try {
+          await fetch("/api/auth/logout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token })
+          });
+        } catch (_) {}
+      }
+      localStorage.clear();
+      setUser(null);
+      setUserRecord(null);
+      setSelectedKey("pizzaria");
+      setCurrentScenario(SCENARIOS.pizzaria);
+      window.location.reload();
+    }
   };
 
   const handleSaveActiveClient = () => {
@@ -259,7 +375,7 @@ export default function Dashboard() {
       });
       
       localStorage.setItem("stock_bi_registered_users", JSON.stringify(updated));
-      setDbSaveSuccess("Dados salvos no seu sandbox corporativo!");
+      setDbSaveSuccess("Dados salvos com sucesso na nuvem corporativa!");
       setTimeout(() => setDbSaveSuccess(null), 3000);
     } catch (err) {
       console.error(err);
@@ -271,6 +387,28 @@ export default function Dashboard() {
   // Scenario selector and loaded state
   const [selectedKey, setSelectedKey] = useState<string>("pizzaria");
   const [currentScenario, setCurrentScenario] = useState<ClientScenario>(SCENARIOS.pizzaria);
+  const [showNewSegmentInput, setShowNewSegmentInput] = useState<boolean>(false);
+  const [newSegmentName, setNewSegmentName] = useState<string>("");
+  const [customSegments, setCustomSegments] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("stock_bi_custom_segments");
+      return stored ? JSON.parse(stored) : [];
+    }
+    return [];
+  });
+
+  const handleAddCustomSegment = (segmentName: string) => {
+    if (!segmentName.trim()) return;
+    const trimmed = segmentName.trim();
+    if (!customSegments.includes(trimmed)) {
+      const updated = [...customSegments, trimmed];
+      setCustomSegments(updated);
+      localStorage.setItem("stock_bi_custom_segments", JSON.stringify(updated));
+    }
+    setCurrentScenario(prev => ({ ...prev, segmento: trimmed }));
+    setShowNewSegmentInput(false);
+    setNewSegmentName("");
+  };
   const [jsonString, setJsonString] = useState<string>("");
   const [inputMode, setInputMode] = useState<"tables" | "json" | "api" | "excel">("tables");
 
@@ -791,9 +929,14 @@ export default function Dashboard() {
         }
       }
 
+      const token = localStorage.getItem("stock_bi_token") || "";
+
       const response = await fetch("/api/sync-external", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           url: apiUrl,
           method: apiMethod,
@@ -802,10 +945,18 @@ export default function Dashboard() {
         })
       });
 
-      const resData = await response.json();
+      let resData: any = null;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        try {
+          resData = await response.json();
+        } catch (e) {
+          throw new Error("Erro ao decodificar a resposta do servidor como JSON.");
+        }
+      }
 
-      if (!response.ok || !resData.sucesso) {
-        throw new Error(resData.erro || "Falha ao se conectar com a API externa.");
+      if (!response.ok || !resData || !resData.sucesso) {
+        throw new Error(resData?.erro || `Falha ao se conectar com a API externa (Status ${response.status}).`);
       }
 
       setApiRawResponse(resData.raw_data);
@@ -825,16 +976,29 @@ export default function Dashboard() {
     setApiSuccessMessage(null);
 
     try {
+      const token = localStorage.getItem("stock_bi_token") || "";
+
       const response = await fetch("/api/map-schema", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ raw_data: apiRawResponse })
       });
 
-      const resData = await response.json();
+      let resData: any = null;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        try {
+          resData = await response.json();
+        } catch (e) {
+          throw new Error("Erro ao decodificar a resposta do servidor como JSON.");
+        }
+      }
 
-      if (!response.ok || !resData.sucesso) {
-        throw new Error(resData.erro || "Falha ao mapear os dados obtidos.");
+      if (!response.ok || !resData || !resData.sucesso) {
+        throw new Error(resData?.erro || `Falha ao mapear os dados obtidos (Status ${response.status}).`);
       }
 
       const mappedScenario = resData.mapped_scenario;
@@ -961,16 +1125,33 @@ export default function Dashboard() {
         throw new Error("O JSON de entrada é inválido ou contém erros de sintaxe. Corrija o formato antes de prosseguir.");
       }
 
+      const token = localStorage.getItem("stock_bi_token") || "";
+
       const response = await fetch("/api/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
 
-      const resData = await response.json();
+      let resData: any = null;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        try {
+          resData = await response.json();
+        } catch (e) {
+          throw new Error("Erro ao decodificar a resposta do servidor como JSON.");
+        }
+      }
 
-      if (!response.ok || !resData.sucesso) {
-        throw new Error(resData.erro || "Falha ao gerar a análise preditiva.");
+      if (!response.ok) {
+        throw new Error(resData?.erro || `Erro no servidor (Status ${response.status}). Verifique a sua variável GEMINI_API_KEY.`);
+      }
+
+      if (!resData || !resData.sucesso) {
+        throw new Error(resData?.erro || "Falha ao gerar a análise preditiva.");
       }
 
       setResults(resData.data);
@@ -1015,9 +1196,14 @@ export default function Dashboard() {
     setChatLoading(true);
 
     try {
+      const token = localStorage.getItem("stock_bi_token") || "";
+
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           message: userQuery,
           id_cliente: currentScenario.id_cliente,
@@ -1027,9 +1213,18 @@ export default function Dashboard() {
         })
       });
 
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Erro ao consultar o analista virtual.");
+      let data: any = null;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        try {
+          data = await response.json();
+        } catch (e) {
+          throw new Error("Erro ao decodificar a resposta do servidor como JSON.");
+        }
+      }
+
+      if (!response.ok || !data || !data.success) {
+        throw new Error(data?.error || `Erro ao consultar o analista virtual (Status ${response.status}).`);
       }
 
       setChatHistory(prev => [...prev, { sender: "bot", text: data.text }]);
@@ -1073,219 +1268,11 @@ export default function Dashboard() {
   }
 
   // Check trial and payment status
-  const isPaid = userRecord?.isPaid === true;
-
-  const handleCheckout = async () => {
-    if (!user) return;
-    setCheckoutLoading(true);
-    setCheckoutError(null);
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: user.email,
-          returnUrl: window.location.origin + window.location.pathname
-        })
-      });
-      const data = await response.json();
-      if (!response.ok || !data.sucesso) {
-        throw new Error(data.erro || "Falha ao iniciar sessão do Mercado Pago.");
-      }
-      // Redirect to Mercado Pago
-      window.location.href = data.checkoutUrl;
-    } catch (err: any) {
-      console.error(err);
-      // Fallback directly to the official link
-      window.open("https://mpago.la/1r2Bdr8", "_blank");
-    } finally {
-      setCheckoutLoading(false);
-    }
-  };
-
-  const handleSimulatePayment = () => {
-    if (!user) return;
-    updateFullUserRecord(user.email, { isPaid: true });
-    setStripeSuccessModal(true);
-  };
-
-  const getTrialStatus = () => {
-    if (!userRecord || !userRecord.createdAt) return { active: false, hoursLeft: 0, text: "" };
-    const createdTime = new Date(userRecord.createdAt).getTime();
-    const currentTime = new Date().getTime();
-    const diffInMs = currentTime - createdTime;
-    const seventyTwoHoursInMs = 3 * 24 * 60 * 60 * 1000;
-    const timeLeftInMs = seventyTwoHoursInMs - diffInMs;
-    
-    if (timeLeftInMs <= 0) {
-      return { active: false, hoursLeft: 0, text: "Período de teste expirado" };
-    } else {
-      const hoursLeft = Math.ceil(timeLeftInMs / (1000 * 60 * 60));
-      return { active: true, hoursLeft, text: `${hoursLeft}h restantes` };
-    }
-  };
-
-  const trialStatus = getTrialStatus();
-  const showPaymentScreen = !isPaid && !trialStatus.active;
-
-  // Render Payment / Subscription Screen if trial has expired and user has not paid
-  if (showPaymentScreen) {
-    return (
-      <div className="min-h-screen bg-neutral-950 flex flex-col justify-center items-center px-4 relative overflow-hidden font-sans text-white" id="payment-gate-screen">
-        {/* Background decorative blobs */}
-        <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-emerald-500/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 -z-10 animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-[350px] h-[350px] bg-emerald-700/5 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 -z-10"></div>
-
-        <div className="w-full max-w-xl bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 text-center space-y-6">
-          <div className="inline-flex items-center justify-center bg-rose-950/40 border border-rose-800/40 p-4 rounded-full text-rose-400 mb-2">
-            <Lock className="w-10 h-10 animate-pulse" />
-          </div>
-
-          <div className="space-y-2">
-            <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
-              STOCK.BI <span className="text-xs px-2.5 py-0.5 rounded-full bg-rose-950 text-rose-400 border border-rose-900/50 font-mono">TESTE EXPIRADO</span>
-            </h1>
-            <p className="text-sm text-neutral-400">
-              Seu período de avaliação gratuita de 72 horas expirou. Ative seu perfil para continuar.
-            </p>
-          </div>
-
-          {/* Pricing card / Features */}
-          <div className="bg-neutral-950/80 p-5 rounded-2xl border border-neutral-850 text-left space-y-4">
-            <div className="text-xs font-mono uppercase tracking-wider text-emerald-400 border-b border-neutral-800 pb-2 flex items-center justify-between">
-              <span>Plano Mensal Ilimitado</span>
-              <span className="text-white font-bold text-sm">R$ 99,00/mês</span>
-            </div>
-
-            <ul className="space-y-2.5 text-xs text-neutral-300">
-              <li className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                Acesso completo a todas as conexões (Planilhas Excel, APIs, ERPs)
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                Análises preditivas ilimitadas com Inteligência Artificial
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                Previsões de demanda, ruptura e análise de validade automatizada
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                Suporte prioritário e relatórios personalizados
-              </li>
-            </ul>
-          </div>
-
-          {checkoutError && (
-            <div className="p-3 bg-rose-950/20 text-rose-400 border border-rose-900/40 rounded-xl text-xs text-left flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{checkoutError}</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-            <button
-              onClick={handleCheckout}
-              disabled={checkoutLoading}
-              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/40"
-            >
-              {checkoutLoading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Processando...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="w-4 h-4" /> Assinar via Mercado Pago (Real)
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={handleSimulatePayment}
-              className="w-full py-3.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer border border-neutral-700"
-            >
-              <Sparkles className="w-4 h-4 text-emerald-400" /> Ativar Sandbox (Grátis)
-            </button>
-          </div>
-
-          <div className="pt-2 border-t border-neutral-800">
-            <button
-              onClick={handleLogout}
-              className="text-xs text-neutral-500 hover:text-neutral-300 font-medium cursor-pointer transition-all"
-            >
-              Sair da conta / Entrar com outro usuário
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const isPaid = true;
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans selection:bg-emerald-500 selection:text-neutral-950" id="main-container">
       
-      {/* Mercado Pago Success Modal */}
-      <AnimatePresence>
-        {stripeSuccessModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-neutral-900 border border-neutral-800 max-w-md w-full p-6 rounded-3xl text-center space-y-4 shadow-2xl relative"
-            >
-              <div className="inline-flex items-center justify-center bg-emerald-950 p-4 rounded-full text-emerald-400 border border-emerald-800/40 mb-2">
-                <Check className="w-10 h-10 animate-bounce" />
-              </div>
-              <h3 className="text-xl font-bold text-white">Assinatura Ativada!</h3>
-              <p className="text-xs text-neutral-400 leading-relaxed">
-                Parabéns! Sua assinatura do <strong>STOCK.BI</strong> está ativa e validada com sucesso pelo <strong>Mercado Pago</strong>. 
-                Você agora tem acesso ilimitado a todas as conexões, dados integrados e análises preditivas com inteligência artificial.
-              </p>
-              <button
-                onClick={() => setStripeSuccessModal(false)}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition-all cursor-pointer"
-              >
-                Começar a usar o Painel Ilimitado
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Trial Countdown Banner */}
-      {!isPaid && trialStatus.active && (
-        <div className="bg-emerald-950/40 border-b border-emerald-800/40 py-2.5 px-4 text-center text-xs text-neutral-300 flex flex-col sm:flex-row items-center justify-center gap-2" id="trial-banner">
-          <span className="flex items-center gap-1.5 font-medium">
-            <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
-            Período de Teste Grátis: <strong className="text-white font-semibold">{trialStatus.hoursLeft}h restantes</strong>
-          </span>
-          <span className="hidden sm:inline text-neutral-600">•</span>
-          <span className="flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
-            Análise Inteligente (IA): <strong className="text-white font-semibold">{userRecord?.aiAnalysisCount || 0}/1 usada</strong>
-          </span>
-          <span className="hidden sm:inline text-neutral-600">•</span>
-          <button
-            onClick={handleCheckout}
-            disabled={checkoutLoading}
-            className="text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer disabled:opacity-50"
-          >
-            {checkoutLoading ? "Iniciando Mercado Pago..." : "Assinar Acesso Ilimitado via Mercado Pago →"}
-          </button>
-          <span className="text-neutral-500 text-[10px] sm:ml-2">
-            (ou clique para simular:{" "}
-            <button
-              onClick={handleSimulatePayment}
-              className="text-emerald-400 hover:text-white underline cursor-pointer font-bold"
-            >
-              Confirmar Ativação
-            </button>
-            )
-          </span>
-        </div>
-      )}
       {/* Upper Navigation/Header */}
       <header className="border-b border-neutral-900 bg-neutral-950/80 backdrop-blur sticky top-0 z-40" id="header-nav">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -1305,7 +1292,49 @@ export default function Dashboard() {
           </div>
 
           {/* Active Operator & Logout Action */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {(userRecord?.role === "Administrador" || userRecord?.role === "Super usuário") && (
+              <div className="flex bg-neutral-900 border border-neutral-800 rounded-xl p-1 gap-1" id="tab-switcher-header">
+                <button
+                  onClick={() => setAdminViewTab("analises")}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
+                    adminViewTab === "analises"
+                      ? "bg-emerald-600 text-white shadow shadow-emerald-950/40"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  )}
+                  id="tab-btn-analises"
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  Análises
+                </button>
+                <button
+                  onClick={() => setAdminViewTab("gestao")}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
+                    adminViewTab === "gestao"
+                      ? "bg-emerald-600 text-white shadow shadow-emerald-950/40"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  )}
+                  id="tab-btn-gestao"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Gestão Admin
+                </button>
+              </div>
+            )}
+
+            <a
+              href="https://mpago.la/1r2Bdr8"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold px-4.5 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-600/10 hover:shadow-emerald-500/20 flex items-center gap-2 cursor-pointer"
+              id="btn-subscribe-header"
+            >
+              <CreditCard className="w-4 h-4 text-emerald-200 animate-pulse" />
+              <span>Assinar (R$ 119,90/mês)</span>
+            </a>
+
             <div className="bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2 flex items-center gap-2.5" id="operator-info">
               <User className="w-4 h-4 text-emerald-400" />
               <div className="text-left">
@@ -1314,6 +1343,14 @@ export default function Dashboard() {
               </div>
             </div>
             
+            <button
+              onClick={handleClearAllData}
+              className="text-xs bg-red-950/40 hover:bg-red-900/40 border border-red-900/40 hover:border-red-500/40 px-3.5 py-2.5 rounded-xl text-red-400 hover:text-red-300 transition-all font-semibold cursor-pointer"
+              id="btn-clear-data-nav"
+            >
+              Limpar Dados
+            </button>
+
             <button
               onClick={handleLogout}
               className="text-xs bg-neutral-900 border border-neutral-850 hover:bg-neutral-800 px-3.5 py-2.5 rounded-xl text-neutral-400 hover:text-white transition-all font-semibold cursor-pointer"
@@ -1326,8 +1363,16 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6" id="dashboard-main">
-        {/* Intro Banner */}
-        <div className="mb-8 bg-neutral-900/40 border border-neutral-900 rounded-2xl p-6 relative overflow-hidden" id="intro-banner">
+        {adminViewTab === "gestao" && (userRecord?.role === "Administrador" || userRecord?.role === "Super usuário") ? (
+          <AdminDashboard
+            currentUserEmail={user?.email || ""}
+            currentUserRole={userRecord?.role || "Cliente"}
+            onUserDatabaseChange={handleUserDatabaseChange}
+          />
+        ) : (
+          <>
+            {/* Intro Banner */}
+            <div className="mb-8 bg-neutral-900/40 border border-neutral-900 rounded-2xl p-6 relative overflow-hidden" id="intro-banner">
           <div className="absolute right-0 top-0 w-80 h-80 bg-emerald-500/5 rounded-full blur-3xl -z-10"></div>
           <h2 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-emerald-400" />
@@ -1345,7 +1390,7 @@ export default function Dashboard() {
             <div>
               <h3 className="text-xs font-mono font-semibold text-neutral-400 tracking-widest uppercase flex items-center gap-1.5">
                 <Database className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                1. DADOS DE SEU ESTABELECIMENTO ATIVO (SANDBOX MULTITENANCY)
+                1. DADOS DE SEU ESTABELECIMENTO ATIVO (SISTEMA INTEGRADO)
               </h3>
               <p className="text-xs text-neutral-400 mt-1">
                 Seu usuário logado gerencia este estabelecimento de forma 100% isolada e segura.
@@ -1372,7 +1417,7 @@ export default function Dashboard() {
                   </>
                 ) : (
                   <>
-                    <Cloud className="w-4 h-4 text-emerald-100" /> Salvar Sandbox
+                    <Cloud className="w-4 h-4 text-emerald-100" /> Salvar Alterações
                   </>
                 )}
               </button>
@@ -1395,16 +1440,66 @@ export default function Dashboard() {
             <div>
               <label className="text-[10px] text-neutral-400 uppercase font-mono tracking-wider block mb-1">Segmento de Mercado</label>
               <select
-                value={currentScenario.segmento || ""}
-                onChange={(e) => setCurrentScenario({ ...currentScenario, segmento: e.target.value })}
-                className="w-full bg-neutral-950 border border-neutral-800 text-neutral-200 text-xs rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                value={showNewSegmentInput ? "NEW_SEGMENT_TRIGGER" : (currentScenario.segmento || "")}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "NEW_SEGMENT_TRIGGER") {
+                    setShowNewSegmentInput(true);
+                  } else {
+                    setShowNewSegmentInput(false);
+                    setCurrentScenario({ ...currentScenario, segmento: val });
+                  }
+                }}
+                className="w-full bg-neutral-950 border border-neutral-800 text-neutral-200 text-xs rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
               >
                 <option value="Food Service / Restaurante">Food Service / Restaurante</option>
                 <option value="Varejo Alimentar">Varejo Alimentar</option>
                 <option value="Distribuidora de Bebidas">Distribuidora de Bebidas</option>
                 <option value="Hortifrúti / Açougue">Hortifrúti / Açougue</option>
+                {customSegments.map((seg) => (
+                  <option key={seg} value={seg}>{seg}</option>
+                ))}
                 <option value="Outro Segmento">Outro Segmento</option>
+                <option value="NEW_SEGMENT_TRIGGER" className="text-emerald-400 font-semibold">+ Cadastrar Novo Segmento...</option>
               </select>
+
+              {showNewSegmentInput && (
+                <div className="mt-2 flex gap-2 animate-fadeIn" id="new-segment-input-container">
+                  <input
+                    type="text"
+                    placeholder="Nome do novo segmento"
+                    value={newSegmentName}
+                    onChange={(e) => setNewSegmentName(e.target.value)}
+                    className="flex-1 bg-neutral-950 border border-neutral-800 text-neutral-200 text-xs rounded-xl p-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    id="input-new-segment-name"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCustomSegment(newSegmentName);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddCustomSegment(newSegmentName)}
+                    className="px-2.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center font-bold"
+                    id="btn-confirm-new-segment"
+                  >
+                    OK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewSegmentInput(false);
+                      setNewSegmentName("");
+                    }}
+                    className="px-2.5 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-400 rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center"
+                    id="btn-cancel-new-segment"
+                  >
+                    X
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
@@ -1458,6 +1553,27 @@ export default function Dashboard() {
                   Importar {value.nome_fantasia.split(" ")[0]}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const confirmClear = window.confirm("Tem certeza de que deseja apagar todos os dados simulados? Isso deixará as tabelas de estoque, histórico de vendas, vencimentos e receitas vazias para você preencher com seus dados reais.");
+                  if (confirmClear) {
+                    setCurrentScenario({
+                      ...currentScenario,
+                      niveis_estoque: [],
+                      historico_vendas: [],
+                      alertas_validade: [],
+                      fichas_tecnicas: []
+                    });
+                    setSelectedKey("custom");
+                  }
+                }}
+                className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-900/40 text-rose-300 rounded-xl text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1"
+                id="btn-clear-simulated-data"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Apagar Dados Simulados
+              </button>
             </div>
           </div>
         </div>
@@ -1470,7 +1586,7 @@ export default function Dashboard() {
             <div className="border-b border-neutral-800 p-4 bg-neutral-900/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Database className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-white text-sm">Simulador de Inventário & Dados de Entrada</h3>
+                <h3 className="font-bold text-white text-sm">Inventário e Dados de Entrada</h3>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-neutral-400 font-medium">Origem dos Dados:</span>
@@ -2729,6 +2845,8 @@ export default function Dashboard() {
             </motion.div>
           )}
         </AnimatePresence>
+          </>
+        )}
       </main>
 
       {/* QUICK ACTION DRAWER / MODAL */}

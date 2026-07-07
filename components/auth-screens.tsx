@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { SCENARIOS, ClientScenario } from "@/lib/scenarios";
 
 interface AuthScreensProps {
-  onLogin: (email: string, pass: string) => { success: boolean; error?: string };
+  onLogin: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   onRegister: (
     name: string,
     email: string,
@@ -27,7 +27,7 @@ interface AuthScreensProps {
     businessName: string,
     segment: string,
     templateKey: string
-  ) => { success: boolean; error?: string };
+  ) => Promise<{ success: boolean; error?: string }>;
   initialTab?: "login" | "register";
   onBackToLanding?: () => void;
 }
@@ -37,6 +37,7 @@ export function AuthScreens({ onLogin, onRegister, initialTab = "login", onBackT
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Form Fields
   const [name, setName] = useState<string>("");
@@ -45,9 +46,11 @@ export function AuthScreens({ onLogin, onRegister, initialTab = "login", onBackT
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [businessName, setBusinessName] = useState<string>("");
   const [segment, setSegment] = useState<string>("Food Service / Restaurante");
+  const [showCustomSegment, setShowCustomSegment] = useState<boolean>(false);
+  const [customSegmentName, setCustomSegmentName] = useState<string>("");
   const [templateKey, setTemplateKey] = useState<string>("pizzaria");
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -57,15 +60,22 @@ export function AuthScreens({ onLogin, onRegister, initialTab = "login", onBackT
       return;
     }
 
-    const res = onLogin(email, password);
-    if (!res.success) {
-      setErrorMsg(res.error || "E-mail ou senha inválidos.");
-    } else {
-      setSuccessMsg("Acesso autorizado! Redirecionando...");
+    setIsSubmitting(true);
+    try {
+      const res = await onLogin(email, password);
+      if (!res.success) {
+        setErrorMsg(res.error || "E-mail ou senha inválidos.");
+      } else {
+        setSuccessMsg("Acesso autorizado! Redirecionando...");
+      }
+    } catch (err: any) {
+      setErrorMsg("Erro de comunicação com o servidor.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -85,11 +95,18 @@ export function AuthScreens({ onLogin, onRegister, initialTab = "login", onBackT
       return;
     }
 
-    const res = onRegister(name, email, password, businessName, segment, templateKey);
-    if (!res.success) {
-      setErrorMsg(res.error || "Ocorreu um erro no cadastro.");
-    } else {
-      setSuccessMsg("Usuário cadastrado com sucesso! Iniciando sua sessão...");
+    setIsSubmitting(true);
+    try {
+      const res = await onRegister(name, email, password, businessName, segment, templateKey);
+      if (!res.success) {
+        setErrorMsg(res.error || "Ocorreu um erro no cadastro.");
+      } else {
+        setSuccessMsg("Usuário cadastrado com sucesso! Iniciando sua sessão...");
+      }
+    } catch (err: any) {
+      setErrorMsg("Erro de comunicação com o servidor.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -373,15 +390,52 @@ export function AuthScreens({ onLogin, onRegister, initialTab = "login", onBackT
                     <div>
                       <label className="text-xs text-neutral-400 font-semibold block mb-1.5 font-mono uppercase tracking-wider">Segmento do Negócio</label>
                       <select
-                        value={segment}
-                        onChange={(e) => setSegment(e.target.value)}
+                        value={showCustomSegment ? "NEW_SEGMENT_TRIGGER" : segment}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "NEW_SEGMENT_TRIGGER") {
+                            setShowCustomSegment(true);
+                          } else {
+                            setShowCustomSegment(false);
+                            setSegment(val);
+                          }
+                        }}
                         className="w-full bg-neutral-950 border border-neutral-800 text-white text-sm rounded-xl py-3 px-3.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer"
                       >
                         <option value="Food Service / Restaurante">Restaurante / Pizzaria</option>
                         <option value="Varejo Alimentar">Mercado / Varejo</option>
                         <option value="Distribuidora de Bebidas">Distribuidora de Bebidas</option>
                         <option value="Hortifrúti / Açougue">Hortifrúti / Açougue</option>
+                        <option value="NEW_SEGMENT_TRIGGER" className="text-emerald-400 font-semibold">+ Cadastrar Novo Segmento...</option>
                       </select>
+
+                      {showCustomSegment && (
+                        <div className="mt-2 flex gap-2 animate-fadeIn" id="new-segment-auth-container">
+                          <input
+                            type="text"
+                            placeholder="Nome do segmento"
+                            value={customSegmentName}
+                            onChange={(e) => {
+                              setCustomSegmentName(e.target.value);
+                              setSegment(e.target.value);
+                            }}
+                            className="flex-1 bg-neutral-950 border border-neutral-800 text-white text-xs rounded-xl p-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            id="input-auth-new-segment"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (customSegmentName.trim()) {
+                                setSegment(customSegmentName.trim());
+                              }
+                              setShowCustomSegment(false);
+                            }}
+                            className="px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                          >
+                            OK
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -415,8 +469,22 @@ export function AuthScreens({ onLogin, onRegister, initialTab = "login", onBackT
         </AnimatePresence>
       </div>
 
-      <div className="text-center mt-6 text-xs text-neutral-500 font-mono">
-        Ambiente Sandbox Seguro • Seus dados são isolados localmente por usuário
+      <div className="text-center mt-6 text-xs text-neutral-500 font-mono space-y-2">
+        <div>Ambiente 100% Seguro • Seus dados corporativos são isolados e protegidos de forma segura</div>
+        <div>
+          <button
+            onClick={() => {
+              if (confirm("Tem certeza que deseja limpar todos os dados cadastrados? Esta ação é irreversível.")) {
+                localStorage.clear();
+                window.location.reload();
+              }
+            }}
+            className="text-neutral-600 hover:text-red-400 underline transition-all text-[11px] cursor-pointer"
+            id="btn-clear-data-auth"
+          >
+            Limpar todos os dados cadastrados (Reset)
+          </button>
+        </div>
       </div>
     </div>
   );
