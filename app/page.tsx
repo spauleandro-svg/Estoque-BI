@@ -2363,11 +2363,16 @@ export default function Dashboard() {
                 id="analyze-btn"
               >
                 {loading ? (
-                  <RefreshCw className="w-4.5 h-4.5 animate-spin" />
+                  <span className="contents" key="btn-loading">
+                    <RefreshCw className="w-4.5 h-4.5 animate-spin" />
+                    <span>Processando...</span>
+                  </span>
                 ) : (
-                  <Play className="w-4.5 h-4.5 fill-current" />
+                  <span className="contents" key="btn-idle">
+                    <Play className="w-4.5 h-4.5 fill-current" />
+                    <span>Analisar com Inteligência Artificial</span>
+                  </span>
                 )}
-                {loading ? "Processando..." : "Analisar com Inteligência Artificial"}
               </button>
             </div>
           </div>
@@ -2389,7 +2394,7 @@ export default function Dashboard() {
               
               {/* If loading is active */}
               {loading && (
-                <div className="flex-1 flex flex-col justify-center items-center py-8 text-center">
+                <div key="console-loading" className="flex-1 flex flex-col justify-center items-center py-8 text-center">
                   <div className="relative mb-6">
                     <div className="w-16 h-16 rounded-full border-2 border-emerald-950 flex items-center justify-center">
                       <Cpu className="w-8 h-8 text-emerald-400 animate-pulse" />
@@ -2422,7 +2427,7 @@ export default function Dashboard() {
 
               {/* If Error exists */}
               {!loading && error && (
-                <div className="flex-1 flex flex-col justify-center items-center py-8 text-center text-rose-400">
+                <div key="console-error" className="flex-1 flex flex-col justify-center items-center py-8 text-center text-rose-400">
                   <div className="bg-rose-950/40 text-rose-400 border border-rose-900/40 p-3.5 rounded-full mb-4">
                     <AlertOctagon className="w-10 h-10 animate-bounce" />
                   </div>
@@ -2438,7 +2443,7 @@ export default function Dashboard() {
 
               {/* Default empty state */}
               {!loading && !error && !results && (
-                <div className="flex-1 flex flex-col justify-center items-center py-12 text-center text-neutral-500">
+                <div key="console-empty" className="flex-1 flex flex-col justify-center items-center py-12 text-center text-neutral-500">
                   <div className="bg-neutral-950 border border-neutral-900 p-4 rounded-full mb-4">
                     <Cpu className="w-8 h-8 text-neutral-700" />
                   </div>
@@ -2451,7 +2456,7 @@ export default function Dashboard() {
 
               {/* Completed log output */}
               {!loading && !error && results && (
-                <div className="flex-1 flex flex-col justify-between h-full">
+                <div key="console-success" className="flex-1 flex flex-col justify-between h-full">
                   <div className="space-y-4">
                     <div className="bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 p-3.5 rounded-xl flex items-center gap-3">
                       <CheckCircle className="w-5 h-5 flex-shrink-0" />
